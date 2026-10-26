@@ -1,0 +1,13 @@
+[Unit]
+Description=Shaxsiy AI yordamchi (Telegram bot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/ai-yordamchi
+ExecStart=/opt/ai-yordamchi/venv/bin/python -m yordamchi.bot
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
