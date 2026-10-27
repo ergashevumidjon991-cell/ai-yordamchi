@@ -17,8 +17,8 @@ Telegram ichida ishlaydigan shaxsiy yordamchi:
 |---|---|---|
 | Interfeys | Telegram bot (aiogram) | bepul |
 | "Miya" | Claude API | ~$1–10/oy (modelga qarab) |
-| Ovozni matnga | Whisper (Groq orqali) | bepul limit yetadi |
-| Matnni ovozga | Microsoft Edge TTS, `uz-UZ-SardorNeural` | bepul |
+| Ovozni matnga | ElevenLabs Scribe (zaxira: Whisper, Groq orqali) | bepul tarif: 10 000 kredit/oy |
+| Matnni ovozga | ElevenLabs Eleven v4 (zaxira: Microsoft `uz-UZ-SardorNeural`) | bepul tarif, kerak bo'lsa $6/oy |
 | Qo'ng'iroq | Ikkinchi Telegram akkaunt + py-tgcalls | bepul |
 | Server | Hetzner CX22 yoki shunga o'xshash VPS | ~$5–7/oy |
 | Rejalar bazasi | SQLite (server ichida) | bepul |
@@ -35,8 +35,14 @@ Telegram ichida ishlaydigan shaxsiy yordamchi:
 2. Billing bo'limida $5–10 to'ldiring.
 3. API Keys → Create Key (`ANTHROPIC_API_KEY`).
 
-### 3. Ovozni tanish kaliti (bepul)
-[console.groq.com](https://console.groq.com) → API Keys → Create (`STT_API_KEY`).
+### 3. ElevenLabs kaliti (ovoz uchun)
+1. [elevenlabs.io](https://elevenlabs.io) da ro'yxatdan o'ting (bepul tarif yetadi).
+2. Profil → **API Keys** → Create (`ELEVEN_API_KEY`).
+3. Xohlasangiz **Voices** bo'limidan yoqqan erkak ovozni tanlab, ID sini `ELEVEN_VOICE_ID` ga yozing.
+
+Kredit tugasa, bot o'zi bepul Microsoft ovoziga o'tadi. Zaxira sifatida
+[console.groq.com](https://console.groq.com) dan bepul kalit olib, `STT_API_KEY` ga yozib qo'ysangiz,
+ovozni tanish ham to'xtab qolmaydi.
 
 ### 4. Server
 [Hetzner Cloud](https://www.hetzner.com/cloud) da **CX22** (yoki eng arzon) server oling, tizim: **Ubuntu 24.04**.

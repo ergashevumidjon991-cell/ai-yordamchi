@@ -12,10 +12,20 @@ from . import config
 log = logging.getLogger(__name__)
 
 
+ELEVEN_URL = "https://api.elevenlabs.io/v1"
+
+
 async def speech_to_text(audio_path: Path) -> str:
-    """Ovozli xabarni matnga aylantiradi (Whisper, OpenAI-mos API orqali)."""
+    """Ovozli xabarni matnga aylantiradi: ElevenLabs Scribe, bo'lmasa Whisper."""
+    if config.ELEVEN_API_KEY:
+        try:
+            return await _eleven_stt(audio_path)
+        except Exception as e:  # noqa: BLE001 — kredit tugasa zaxira Whisper'ga o'tamiz
+            if not config.STT_API_KEY:
+                raise
+            log.warning("ElevenLabs STT ishlamadi (%s), Whisper ishlatiladi", e)
     if not config.STT_API_KEY:
-        raise RuntimeError("STT_API_KEY ko'rsatilmagan")
+        raise RuntimeError("ELEVEN_API_KEY ham, STT_API_KEY ham ko'rsatilmagan")
     async with httpx.AsyncClient(timeout=120) as http:
         with audio_path.open("rb") as f:
             resp = await http.post(
@@ -23,6 +33,19 @@ async def speech_to_text(audio_path: Path) -> str:
                 headers={"Authorization": f"Bearer {config.STT_API_KEY}"},
                 files={"file": (audio_path.name, f, "audio/ogg")},
                 data={"model": config.STT_MODEL, "language": "uz", "response_format": "json"},
+            )
+    resp.raise_for_status()
+    return resp.json().get("text", "").strip()
+
+
+async def _eleven_stt(audio_path: Path) -> str:
+    async with httpx.AsyncClient(timeout=120) as http:
+        with audio_path.open("rb") as f:
+            resp = await http.post(
+                f"{ELEVEN_URL}/speech-to-text",
+                headers={"xi-api-key": config.ELEVEN_API_KEY},
+                files={"file": (audio_path.name, f, "audio/ogg")},
+                data={"model_id": config.ELEVEN_STT_MODEL, "language_code": "uz"},
             )
     resp.raise_for_status()
     return resp.json().get("text", "").strip()
@@ -39,9 +62,29 @@ async def text_to_speech(text: str) -> Path:
     tmp = Path(tempfile.mkdtemp())
     mp3 = tmp / "javob.mp3"
     ogg = tmp / "javob.ogg"
-    await edge_tts.Communicate(_clean_for_speech(text), config.TTS_VOICE).save(str(mp3))
+    text = _clean_for_speech(text)
+    try:
+        if not config.ELEVEN_API_KEY:
+            raise RuntimeError("ElevenLabs sozlanmagan")
+        await _eleven_tts(text, mp3)
+    except Exception as e:  # noqa: BLE001 — kredit tugasa yoki xato bo'lsa bepul ovozga o'tamiz
+        if config.ELEVEN_API_KEY:
+            log.warning("ElevenLabs TTS ishlamadi (%s), bepul ovoz ishlatiladi", e)
+        await edge_tts.Communicate(text, config.TTS_VOICE).save(str(mp3))
     await _ffmpeg("-i", str(mp3), "-c:a", "libopus", "-b:a", "48k", str(ogg))
     return ogg
+
+
+async def _eleven_tts(text: str, dst: Path) -> None:
+    async with httpx.AsyncClient(timeout=120) as http:
+        resp = await http.post(
+            f"{ELEVEN_URL}/text-to-speech/{config.ELEVEN_VOICE_ID}",
+            params={"output_format": "mp3_44100_128"},
+            headers={"xi-api-key": config.ELEVEN_API_KEY},
+            json={"text": text, "model_id": config.ELEVEN_TTS_MODEL, "language_code": "uz"},
+        )
+    resp.raise_for_status()
+    dst.write_bytes(resp.content)
 
 
 async def to_call_audio(src: Path) -> Path:

@@ -21,6 +21,11 @@ OWNER_NAME = _get("OWNER_NAME", "Xo'jayin")
 CLAUDE_MODEL = _get("CLAUDE_MODEL", "claude-opus-5-5")
 CLAUDE_EFFORT = _get("CLAUDE_EFFORT", "low")
 
+ELEVEN_API_KEY = _get("ELEVEN_API_KEY")
+ELEVEN_VOICE_ID = _get("ELEVEN_VOICE_ID", "pNInz6obpgDQGcFmaJgB")  # "Adam", erkak ovozi
+ELEVEN_TTS_MODEL = _get("ELEVEN_TTS_MODEL", "eleven_v4")
+ELEVEN_STT_MODEL = _get("ELEVEN_STT_MODEL", "scribe_v2")
+
 STT_API_KEY = _get("STT_API_KEY")
 STT_BASE_URL = _get("STT_BASE_URL", "https://api.groq.com/openai/v1")
 STT_MODEL = _get("STT_MODEL", "whisper-large-v3")
