@@ -114,10 +114,11 @@ async def _ring_loop(alarm: dict) -> None:
         text += f" {alarm['label']}."
     try:
         ogg = await voice.text_to_speech(text + " Turing, bugun ko'p ishimiz bor!")
-        call_audio = await voice.to_call_audio(ogg)
     except Exception:  # noqa: BLE001
         log.exception("Alarm TTS error")
-        ogg = call_audio = None
+        ogg = None
+    # Qo'ng'iroqda aytiladigan gap: ko'targach, «turdim» desangiz kun rejasini aytib beradi
+    greeting = text + " Turgan bo'lsangiz, turdim deng."
 
     while alarm["id"] in ringing and ringing[alarm["id"]] < config.ALARM_MAX_TRIES:
         ringing[alarm["id"]] += 1
@@ -128,8 +129,7 @@ async def _ring_loop(alarm: dict) -> None:
                 await notify.text("⏰ " + text, _alarm_buttons(alarm["id"]), ALARM_HINT)
         except Exception:  # noqa: BLE001 — xabar ketmasa ham qo'ng'iroq qilaveramiz
             log.exception("Alarm message error")
-        if call_audio:
-            await caller.ring(call_audio)
+        await caller.converse(greeting)
         for _ in range(config.ALARM_REPEAT_EVERY * 60 // 5):
             if alarm["id"] not in ringing:
                 return

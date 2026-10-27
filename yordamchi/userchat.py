@@ -24,9 +24,14 @@ HELP = (
     "/budilnik — budilniklar ro'yxati\n"
     "/bilim — bilim bazasi\n"
     "/yangi — suhbatni yangidan boshlash\n"
-    "/test_qongiroq — qo'ng'iroqni sinash\n\n"
+    "/test_qongiroq — qo'ng'iroq qilib gaplashish\n"
+    "Yoki o'zingiz shu akkauntga qo'ng'iroq qiling, ko'tarib gaplashaman.\n\n"
     "Bilim bazasiga fayl qo'shish: .md yoki .txt faylni shu yerga yuboring."
 )
+
+TEST_CALL_TEXT = ("Hozir qo'ng'iroq qilaman. Ko'tarib, men bilan gaplashing: rejalar haqida so'rang "
+                  "yoki maslahat oling. Tugatish uchun «xayr» deng.")
+TEST_CALL_GREETING = "Assalomu alaykum, {name}! Eshitaman, nima haqida gaplashamiz?"
 
 PLAN_QUESTIONS = {
     "bugun": "Bugungi rejalarimni aytib ber.",
@@ -76,10 +81,9 @@ async def _command(cmd: str) -> None:
         await caller.send_text("📚 Bilim bazasi:\n" + "\n".join(f"• {f}" for f in files) if files
                                else "Bilim bazasi bo'sh.")
     elif cmd == "test_qongiroq":
-        await caller.send_text("Hozir qo'ng'iroq qilaman...")
-        ogg = await voice.text_to_speech(f"Salom {config.OWNER_NAME}, bu sinov qo'ng'irog'i. Hammasi ishlayapti!")
-        ok = await caller.ring(await voice.to_call_audio(ogg), seconds=15)
-        await caller.send_text("Qo'ng'iroq ishladi ✅" if ok else "Qo'ng'iroqqa javob berilmadi yoki xato bo'ldi.")
+        await caller.send_text(TEST_CALL_TEXT)
+        ok = await caller.converse(TEST_CALL_GREETING.format(name=config.OWNER_NAME))
+        await caller.send_text("Qo'ng'iroq tugadi ✅" if ok else "Qo'ng'iroqqa javob berilmadi yoki xato bo'ldi.")
     else:
         await caller.send_text("Bunday buyruq yo'q. /yordam — nimalar qila olishim.")
 

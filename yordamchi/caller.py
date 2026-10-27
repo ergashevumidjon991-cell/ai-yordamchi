@@ -13,6 +13,8 @@ class Caller:
         self.enabled = bool(config.USERBOT_API_ID and config.USERBOT_API_HASH)
         self._client = None
         self._calls = None
+        self._conv = None
+        self._lock = asyncio.Lock()
 
     @property
     def chat_enabled(self) -> bool:
@@ -47,10 +49,31 @@ class Caller:
 
             self._calls = PyTgCalls(self._client)
             await self._calls.start()
+            self._register_call_handlers()
             log.info("Userbot ishga tushdi, qo'ng'iroqlar yoqilgan")
         except Exception:  # noqa: BLE001 — qo'ng'iroq ishlamasa ham yozishish ishlasin
             log.exception("Qo'ng'iroq modulini ishga tushirib bo'lmadi")
             self._calls = None
+
+    def _register_call_handlers(self) -> None:
+        from pytgcalls import filters
+        from pytgcalls.types import ChatUpdate, Direction
+
+        @self._calls.on_update(filters.stream_frame(Direction.INCOMING))
+        async def _frames(_, update) -> None:
+            if self._conv is not None and update.chat_id == config.OWNER_ID:
+                for frame in update.frames:
+                    self._conv.feed(frame.frame)
+
+        @self._calls.on_update(filters.chat_update(ChatUpdate.Status.LEFT_CALL))
+        async def _ended(_, update) -> None:
+            if self._conv is not None and update.chat_id == config.OWNER_ID:
+                self._conv.ended.set()
+
+        @self._calls.on_update(filters.chat_update(ChatUpdate.Status.INCOMING_CALL))
+        async def _incoming(_, update) -> None:
+            if update.chat_id == config.OWNER_ID:
+                asyncio.create_task(self.converse(f"Eshitaman, {config.OWNER_NAME}!", incoming=True))
 
     def on_owner_message(self, handler) -> None:
         """Egasidan kelgan shaxsiy xabarlarni handler(event) ga uzatadi."""
@@ -76,23 +99,54 @@ class Caller:
         """async with caller.typing(): ... — "yozmoqda"/"ovoz yozmoqda" holatini ko'rsatadi."""
         return self._client.action(config.OWNER_ID, "record-audio" if voice else "typing")
 
-    async def ring(self, audio: Path, seconds: int = 45) -> bool:
-        """Egasiga qo'ng'iroq qiladi va audio faylni ijro etadi. Javob berilsa True."""
+    async def _silence(self) -> Path:
+        """Qo'ng'iroqni boshlash uchun 1 soniyalik jim audio."""
+        path = config.DATA_DIR / "silence.mp3"
+        if not path.exists():
+            from . import voice
+
+            await voice._ffmpeg("-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", "1", str(path))
+        return path
+
+    async def play_in_call(self, audio: Path) -> None:
+        await self._calls.play(config.OWNER_ID, str(audio))
+
+    async def converse(self, greeting: str, seconds: int = 45, incoming: bool = False) -> bool:
+        """Egasiga qo'ng'iroq qiladi (yoki uning qo'ng'irog'ini oladi) va jonli gaplashadi.
+
+        Javob berilsa True. Gap telefon ko'tarilgandan keyin boshlanadi.
+        """
         if not self.enabled or self._calls is None:
             return False
-        from pytgcalls.types import CallConfig
-
-        try:
-            await self._calls.play(config.OWNER_ID, str(audio), config=CallConfig(timeout=seconds))
-        except Exception as e:  # noqa: BLE001 — rad etilsa/javob berilmasa ham davom etamiz
-            log.info("Qo'ng'iroqqa javob berilmadi: %s", e.__class__.__name__)
+        if self._lock.locked():
             return False
-        await asyncio.sleep(seconds)
-        try:
-            await self._calls.leave_call(config.OWNER_ID)
-        except Exception:  # noqa: BLE001
-            pass
-        return True
+        from pytgcalls.types import CallConfig, RecordStream
+        from pytgcalls.types.raw import AudioParameters
+
+        from .livecall import RATE, Conversation
+
+        async with self._lock:
+            try:
+                await self._calls.play(config.OWNER_ID, str(await self._silence()),
+                                       config=CallConfig(timeout=seconds))
+            except Exception as e:  # noqa: BLE001 — rad etilsa/javob berilmasa ham davom etamiz
+                log.info("Qo'ng'iroqqa javob berilmadi: %s", e.__class__.__name__)
+                return False
+            self._conv = Conversation(greeting)
+            try:
+                await self._calls.record(config.OWNER_ID,
+                                         RecordStream(audio=True, audio_parameters=AudioParameters(RATE, 1)))
+            except Exception:  # noqa: BLE001 — eshita olmasak ham hech bo'lmasa gapiramiz
+                log.exception("Qo'ng'iroqdagi ovozni yozib bo'lmadi")
+            try:
+                await self._conv.run()
+            finally:
+                self._conv = None
+                try:
+                    await self._calls.leave_call(config.OWNER_ID)
+                except Exception:  # noqa: BLE001
+                    pass
+            return True
 
 
 caller = Caller()

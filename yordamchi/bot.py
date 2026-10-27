@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery, FSInputFile, Message
 
 from . import actions, ai, config, db, notify, reminders, userchat, voice
 from .caller import caller
+from .userchat import TEST_CALL_GREETING, TEST_CALL_TEXT
 
 log = logging.getLogger(__name__)
 dp = Dispatcher()
@@ -82,10 +83,9 @@ async def test_call(message: Message) -> None:
     if not caller.enabled:
         await message.answer("Qo'ng'iroq akkaunti ulanmagan. O'rnatish yo'riqnomasidagi 5-qadamni bajaring.")
         return
-    await message.answer("Hozir qo'ng'iroq qilaman...")
-    ogg = await voice.text_to_speech(f"Salom {config.OWNER_NAME}, bu sinov qo'ng'irog'i. Hammasi ishlayapti!")
-    ok = await caller.ring(await voice.to_call_audio(ogg), seconds=15)
-    await message.answer("Qo'ng'iroq ishladi ✅" if ok else "Qo'ng'iroqqa javob berilmadi yoki xato bo'ldi.")
+    await message.answer(TEST_CALL_TEXT)
+    ok = await caller.converse(TEST_CALL_GREETING.format(name=config.OWNER_NAME))
+    await message.answer("Qo'ng'iroq tugadi ✅" if ok else "Qo'ng'iroqqa javob berilmadi yoki xato bo'ldi.")
 
 
 @dp.message(Command("bilim"))
