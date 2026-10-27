@@ -49,9 +49,16 @@ class Conversation:
         self.speech_time = 0.0
         self.silence_time = 0.0
         self.bye = False
+        # Tekshirish uchun statistika: qancha ovoz keldi va qanchalik baland
+        self.stat_frames = 0
+        self.stat_bytes = 0
+        self.stat_max = 0.0
 
     # --- ovoz kelishi ---
     def feed(self, pcm: bytes) -> None:
+        self.stat_frames += 1
+        self.stat_bytes += len(pcm)
+        self.stat_max = max(self.stat_max, _level(pcm))
         if self.ended.is_set() or self.busy or time.monotonic() < self.speaking_until:
             return
         seconds = len(pcm) / 2 / RATE
@@ -83,6 +90,7 @@ class Conversation:
             audio = await voice.to_call_audio(ogg)
             duration = await _duration(audio)
             self.speaking_until = time.monotonic() + duration + 0.8
+            log.info("Qo'ng'iroqda gapiryapman: %.1f s", duration)
             await caller.play_in_call(audio)
             await asyncio.sleep(duration + 0.3)
         except Exception:  # noqa: BLE001
@@ -125,10 +133,21 @@ class Conversation:
         finally:
             self.busy = False
 
+    def log_stats(self) -> None:
+        log.info("Qo'ng'iroq ovozi: %d bo'lak, %d bayt, eng baland %.0f, shovqin %.0f",
+                 self.stat_frames, self.stat_bytes, self.stat_max, self.noise)
+        self.stat_frames = self.stat_bytes = 0
+        self.stat_max = 0.0
+
     async def run(self) -> None:
+        log.info("Qo'ng'iroq ulandi, salom beryapman")
         await self.say(self.greeting)
+        last_stats = time.monotonic()
         while not self.ended.is_set():
             now = time.monotonic()
+            if now - last_stats >= 5:
+                self.log_stats()
+                last_stats = now
             if not self.busy and now - self.last_activity > IDLE_HANGUP:
                 await self.say("Gapirmayapsiz, qo'ng'iroqni tugataman. Kerak bo'lsa, o'zingiz qo'ng'iroq qiling.")
                 break
@@ -140,6 +159,7 @@ class Conversation:
             except asyncio.TimeoutError:
                 pass
         self.ended.set()
+        log.info("Qo'ng'iroq tugadi")
 
 
 def _plain(text: str) -> str:

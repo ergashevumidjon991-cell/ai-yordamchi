@@ -65,6 +65,15 @@ class Caller:
                 for frame in update.frames:
                     self._conv.feed(frame.frame)
 
+        @self._calls.on_update(filters.chat_update(ChatUpdate.Status.LEFT_CALL | ChatUpdate.Status.INCOMING_CALL
+                                                   | ChatUpdate.Status.MIGRATE_TO_CONFERENCE_CALL))
+        async def _log_status(_, update) -> None:
+            log.info("Qo'ng'iroq holati: %s", update.status)
+
+        @self._calls.on_update(filters.stream_end())
+        async def _stream_end(_, update) -> None:
+            log.info("Ovoz ijrosi tugadi: %s %s", update.stream_type, update.device)
+
         @self._calls.on_update(filters.chat_update(ChatUpdate.Status.LEFT_CALL))
         async def _ended(_, update) -> None:
             if self._conv is not None and update.chat_id == config.OWNER_ID:
@@ -136,6 +145,7 @@ class Caller:
             try:
                 await self._calls.record(config.OWNER_ID,
                                          RecordStream(audio=True, audio_parameters=AudioParameters(RATE, 1)))
+                log.info("Qo'ng'iroqdagi ovozni eshitish yoqildi")
             except Exception:  # noqa: BLE001 — eshita olmasak ham hech bo'lmasa gapiramiz
                 log.exception("Qo'ng'iroqdagi ovozni yozib bo'lmadi")
             try:
