@@ -17,6 +17,11 @@ QUESTIONS = [
     ("USERBOT_API_HASH", "Qo'ng'iroq akkaunti api_hash (hozircha bo'lmasa Enter bosing)", False),
 ]
 
+# Bu qiymatlar maxfiy emas, shuning uchun to'liq ko'rsatiladi
+PUBLIC = {"OWNER_ID", "OWNER_NAME", "USERBOT_API_ID"}
+# Bu qiymatlar faqat raqamdan iborat bo'lishi kerak
+DIGITS = {"OWNER_ID", "USERBOT_API_ID"}
+
 DEFAULTS = {
     "CLAUDE_MODEL": "claude-opus-5-5",
     "CLAUDE_EFFORT": "low",
@@ -53,16 +58,20 @@ def main() -> None:
     print("Qavs ichida eski qiymat bo'lsa, uni o'zgartirmaslik uchun shunchaki Enter bosing.\n")
     for key, question, required in QUESTIONS:
         old = values.get(key, "")
-        hint = f" [{old[:6]}...]" if old else ""
+        hint = (f" [{old}]" if key in PUBLIC else f" [{old[:6]}...]") if old else ""
         while True:
             answer = clean(input(f"{question}{hint}: "))
             if answer:
                 values[key] = answer
-            if values.get(key) or not required:
+            value = values.get(key, "")
+            if key in DIGITS and value and not value.isdigit():
+                print("  Bu yerga faqat raqam yoziladi. Qaytadan kiriting.")
+                values[key] = ""
+                hint = ""
+                continue
+            if value or not required:
                 break
             print("  Bu kalit majburiy, iltimos kiriting.")
-        if key == "OWNER_ID" and not values[key].isdigit():
-            print("  Diqqat: ID faqat raqamlardan iborat bo'lishi kerak. Keyin qayta tekshiring.")
     ENV.write_text("".join(f"{k}={v}\n" for k, v in values.items()), encoding="utf-8")
     ENV.chmod(0o600)
     print(f"\nTayyor! Sozlamalar saqlandi: {ENV}")
