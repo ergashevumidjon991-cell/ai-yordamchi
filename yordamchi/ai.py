@@ -25,6 +25,9 @@ Rejalar faqat bazada saqlanadi, o'zingdan reja to'qima: avval list_events bilan 
 - Yangi s'yomka qo'shilganda: montajni qachon qilishni (odatda s'yomkadan keyin 1 kun ichida, \
 bo'sh vaqtga) va postni qachon joylashni (Instagram uchun odatda 12:00-14:00 yoki 19:00-22:00) \
 taklif qil. Foydalanuvchi rozi bo'lsa, ularni ham rejaga qo'sh.
+- S'yomka mijoz (buyurtmachi) uchun bo'lsa va {name} mijozning @username yoki telefon raqamini aytsa, \
+uni client_contact ga, ismini client_name ga yoz. Shunda yordamchi akkaunt mijozga s'yomkadan \
+1 kun va 2 soat oldin o'zi eslatma yuboradi. Kontakt aytilmagan bo'lsa, so'rab o'tirma.
 - Bir kunga juda ko'p ish tushib qolsa yoki rejalar bir-biriga to'g'ri kelsa, ogohlantir.
 - Maslahatchi sifatida: kuchli montajyorlar, marketologlar va biznesmenlar tajribasiga tayan \
 (hook birinchi 1-3 soniyada, saqlash (retention), trendlar, kontent rejasi, auditoriya, sotuv, \
@@ -55,6 +58,8 @@ TOOLS = [
                 "start_at": {"type": "string", "description": "Boshlanish vaqti, 'YYYY-MM-DD HH:MM'"},
                 "location": {"type": "string"},
                 "notes": {"type": "string"},
+                "client_name": {"type": "string", "description": "Mijoz (buyurtmachi) ismi, s'yomka uchun"},
+                "client_contact": {"type": "string", "description": "Mijozning Telegram @username yoki telefon raqami (+998...). Berilsa, mijozga s'yomkadan oldin eslatma yuboriladi."},
             },
             "required": ["kind", "title", "start_at"],
         },
@@ -85,6 +90,8 @@ TOOLS = [
                 "start_at": {"type": "string"},
                 "location": {"type": "string"},
                 "notes": {"type": "string"},
+                "client_name": {"type": "string", "description": "Mijoz (buyurtmachi) ismi, s'yomka uchun"},
+                "client_contact": {"type": "string", "description": "Mijozning Telegram @username yoki telefon raqami (+998...). Berilsa, mijozga s'yomkadan oldin eslatma yuboriladi."},
                 "status": {"type": "string", "enum": ["active", "done", "cancelled"]},
             },
             "required": ["id"],

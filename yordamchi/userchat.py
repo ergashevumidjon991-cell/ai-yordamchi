@@ -3,7 +3,7 @@ import logging
 import tempfile
 from pathlib import Path
 
-from . import actions, ai, config, db, reminders, voice
+from . import actions, ai, clients, config, db, reminders, voice
 from .caller import caller
 
 log = logging.getLogger(__name__)
@@ -120,6 +120,10 @@ async def _voice(event) -> None:
 
 
 async def _text(text: str, as_voice: bool) -> None:
+    client_reply = await clients.answer(text)
+    if client_reply:
+        await caller.send_text(client_reply)
+        return
     quick = actions.quick_reply(text)
     if quick:
         result, reply = quick

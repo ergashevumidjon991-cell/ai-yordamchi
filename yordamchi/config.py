@@ -48,10 +48,15 @@ DB_PATH = DATA_DIR / "yordamchi.db"
 USERBOT_SESSION = str(DATA_DIR / "userbot")
 KNOWLEDGE_DIR = ROOT / "knowledge"
 
+# Mijozga eslatma: kim nomidan yoziladi; 1 — o'zi yuboradi, 0 — avval egasidan «yubor» deb so'raydi
+OWNER_FULL_NAME = _get("OWNER_FULL_NAME", "Umidjon Ergashev")
+CLIENT_AUTO_SEND = _get("CLIENT_AUTO_SEND", "1") == "1"
+
 # Eslatma sozlamalari (daqiqalarda)
 SHOOT_REMINDERS = [24 * 60, 60, 30]   # s'yomkadan oldin: 1 kun, 1 soat, 30 daqiqa
 SHOOT_NAG_EVERY = 5                    # "Yo'lga chiqdim" bosilmaguncha har 5 daqiqada
 SHOOT_NAG_UNTIL_AFTER = 30             # s'yomka boshlanganidan keyin 30 daqiqagacha eslatadi
+CLIENT_REMINDERS = [24 * 60, 120]       # mijozga: 1 kun va 2 soat oldin
 TASK_REMINDERS = [60, 0]               # montaj/post: 1 soat oldin va vaqtida
 ALARM_REPEAT_EVERY = 3                 # "Turdim" bosilmaguncha har 3 daqiqada
 ALARM_MAX_TRIES = 10

@@ -109,6 +109,24 @@ class Caller:
     async def send_voice(self, ogg: Path, caption: str = "") -> None:
         await self._client.send_file(config.OWNER_ID, str(ogg), voice_note=True, caption=caption[:1000])
 
+    async def send_to(self, contact: str, text: str) -> None:
+        """Istalgan odamga (@username yoki +998... raqam) yozadi."""
+        contact = contact.strip()
+        digits = contact.lstrip("+").replace(" ", "").replace("-", "")
+        if digits.isdigit():
+            from telethon.tl.functions.contacts import ImportContactsRequest
+            from telethon.tl.types import InputPhoneContact
+
+            result = await self._client(ImportContactsRequest([
+                InputPhoneContact(client_id=0, phone="+" + digits, first_name="Mijoz", last_name=digits[-4:]),
+            ]))
+            if not result.users:
+                raise RuntimeError("bu raqam Telegramda topilmadi yoki raqamni yashirgan")
+            entity = result.users[0]
+        else:
+            entity = contact if contact.startswith("@") else "@" + contact
+        await self._client.send_message(entity, text)
+
     def typing(self, voice: bool = False):
         """async with caller.typing(): ... — "yozmoqda"/"ovoz yozmoqda" holatini ko'rsatadi."""
         return self._client.action(config.OWNER_ID, "record-audio" if voice else "typing")

@@ -37,6 +37,12 @@ _conn.executescript(
     );
     """
 )
+# Eski bazaga yangi ustunlar qo'shamiz (mijozga eslatma uchun)
+_cols = {r["name"] for r in _conn.execute("PRAGMA table_info(events)")}
+for _col, _type in (("client_name", "TEXT DEFAULT ''"), ("client_contact", "TEXT DEFAULT ''"),
+                    ("client_sent", "TEXT DEFAULT '[]'"), ("client_pending", "TEXT DEFAULT ''")):
+    if _col not in _cols:
+        _conn.execute(f"ALTER TABLE events ADD COLUMN {_col} {_type}")
 _conn.commit()
 
 
@@ -54,13 +60,15 @@ def _row(r: sqlite3.Row | None) -> dict | None:
 
 # --- Rejalar ---
 
-def add_event(kind: str, title: str, start_at: str, location: str = "", notes: str = "") -> dict:
+def add_event(kind: str, title: str, start_at: str, location: str = "", notes: str = "",
+              client_name: str = "", client_contact: str = "") -> dict:
     if kind not in KINDS:
         kind = "boshqa"
     start = parse_dt(start_at).strftime("%Y-%m-%d %H:%M")
     cur = _conn.execute(
-        "INSERT INTO events (kind, title, start_at, location, notes) VALUES (?, ?, ?, ?, ?)",
-        (kind, title, start, location, notes),
+        "INSERT INTO events (kind, title, start_at, location, notes, client_name, client_contact) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (kind, title, start, location, notes, client_name, client_contact.strip()),
     )
     _conn.commit()
     return get_event(cur.lastrowid)
@@ -84,17 +92,25 @@ def active_events() -> list[dict]:
 
 
 def update_event(event_id: int, **fields) -> dict | None:
-    allowed = {"kind", "title", "start_at", "location", "notes", "status"}
+    allowed = {"kind", "title", "start_at", "location", "notes", "status", "client_name", "client_contact",
+               "client_sent", "client_pending"}
     fields = {k: v for k, v in fields.items() if k in allowed and v is not None}
     if "start_at" in fields:
         fields["start_at"] = parse_dt(fields["start_at"]).strftime("%Y-%m-%d %H:%M")
         fields["sent"] = "[]"  # vaqt o'zgarsa eslatmalar qaytadan yuboriladi
+        fields["client_sent"] = "[]"
+        fields["client_pending"] = ""
         fields["status"] = fields.get("status", "active")
     if fields:
         cols = ", ".join(f"{k} = ?" for k in fields)
         _conn.execute(f"UPDATE events SET {cols} WHERE id = ?", (*fields.values(), event_id))
         _conn.commit()
     return get_event(event_id)
+
+
+def client_pending_events() -> list[dict]:
+    rows = _conn.execute("SELECT * FROM events WHERE client_pending != '' AND status = 'active' ORDER BY start_at")
+    return [dict(r) for r in rows]
 
 
 def delete_event(event_id: int) -> bool:

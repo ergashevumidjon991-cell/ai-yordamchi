@@ -6,7 +6,7 @@ from datetime import timedelta
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from . import ai, config, db, notify, voice
+from . import ai, clients, config, db, notify, voice
 from .actions import ringing
 from .caller import caller
 
@@ -151,6 +151,7 @@ async def run() -> None:
         try:
             await check_alarms()
             await check_events()
+            await clients.check()
         except Exception:  # noqa: BLE001 — bitta xato butun rejalashtiruvchini to'xtatmasin
             log.exception("Scheduler error")
         await asyncio.sleep(30)
