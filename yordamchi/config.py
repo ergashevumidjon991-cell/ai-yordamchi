@@ -36,6 +36,8 @@ USERBOT_API_ID = _get("USERBOT_API_ID")
 USERBOT_API_HASH = _get("USERBOT_API_HASH")
 # "userbot" — suhbat, eslatma va budilniklar ikkinchi akkaunt orqali; "bot" — oddiy bot orqali
 CHAT_VIA = _get("CHAT_VIA", "userbot").lower()
+# Qo'ng'iroq ovozini tekshirish uchun batafsil yozuvlar (har qo'ng'iroqdan keyin fayl yuboriladi)
+CALL_DEBUG = _get("CALL_DEBUG", "1") == "1"
 
 TZ = ZoneInfo(_get("TIMEZONE", "Asia/Tashkent"))
 

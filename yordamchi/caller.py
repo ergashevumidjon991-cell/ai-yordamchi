@@ -3,7 +3,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from . import config
+from . import calldebug, config
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +48,8 @@ class Caller:
             from pytgcalls import PyTgCalls
 
             self._calls = PyTgCalls(self._client)
+            calldebug.setup_logging()
+            calldebug.attach(self._calls)
             await self._calls.start()
             self._register_call_handlers()
             log.info("Userbot ishga tushdi, qo'ng'iroqlar yoqilgan")
@@ -62,6 +64,9 @@ class Caller:
         @self._calls.on_update(filters.stream_frame(Direction.INCOMING))
         async def _frames(_, update) -> None:
             if self._conv is not None and update.chat_id == config.OWNER_ID:
+                if self._conv.stat_frames == 0 and update.frames:
+                    f = update.frames[0]
+                    log.debug("Kelgan ovoz bo'lagi: device=%s ssrc=%s %d bayt", update.device, f.ssrc, len(f.frame))
                 for frame in update.frames:
                     self._conv.feed(frame.frame)
 
@@ -140,12 +145,14 @@ class Caller:
                                        config=CallConfig(timeout=seconds))
             except Exception as e:  # noqa: BLE001 — rad etilsa/javob berilmasa ham davom etamiz
                 log.info("Qo'ng'iroqqa javob berilmadi: %s", e.__class__.__name__)
+                await calldebug.send_report(self._client)
                 return False
             self._conv = Conversation(greeting)
             try:
                 await self._calls.record(config.OWNER_ID,
                                          RecordStream(audio=True, audio_parameters=AudioParameters(RATE, 1)))
                 log.info("Qo'ng'iroqdagi ovozni eshitish yoqildi")
+                await calldebug.log_state(self._calls, config.OWNER_ID)
             except Exception:  # noqa: BLE001 — eshita olmasak ham hech bo'lmasa gapiramiz
                 log.exception("Qo'ng'iroqdagi ovozni yozib bo'lmadi")
             try:
@@ -156,6 +163,7 @@ class Caller:
                     await self._calls.leave_call(config.OWNER_ID)
                 except Exception:  # noqa: BLE001
                     pass
+                await calldebug.send_report(self._client)
             return True
 
 
