@@ -39,16 +39,26 @@ async def speech_to_text(audio_path: Path) -> str:
 
 
 async def _eleven_stt(audio_path: Path) -> str:
+    # Telegram ovozli xabari (ogg/opus) ni hamma qo'llaydigan mp3 ga aylantiramiz
+    mp3 = audio_path.with_suffix(".stt.mp3")
+    await _ffmpeg("-i", str(audio_path), "-ac", "1", "-ar", "16000", str(mp3))
     async with httpx.AsyncClient(timeout=120) as http:
-        with audio_path.open("rb") as f:
-            resp = await http.post(
-                f"{ELEVEN_URL}/speech-to-text",
-                headers={"xi-api-key": config.ELEVEN_API_KEY},
-                files={"file": (audio_path.name, f, "audio/ogg")},
-                data={"model_id": config.ELEVEN_STT_MODEL, "language_code": "uz"},
-            )
-    resp.raise_for_status()
-    return resp.json().get("text", "").strip()
+        resp = None
+        # Avval o'zbek tilini ko'rsatib, rad etilsa tilni avtomatik aniqlash bilan urinamiz
+        for extra in ({"language_code": "uzb"}, {"language_code": "uz"}, {}):
+            with mp3.open("rb") as f:
+                resp = await http.post(
+                    f"{ELEVEN_URL}/speech-to-text",
+                    headers={"xi-api-key": config.ELEVEN_API_KEY},
+                    files={"file": ("xabar.mp3", f, "audio/mpeg")},
+                    data={"model_id": config.ELEVEN_STT_MODEL, **extra},
+                )
+            if resp.status_code < 400:
+                return resp.json().get("text", "").strip()
+            log.warning("ElevenLabs STT %s (%s): %s", resp.status_code, extra, resp.text[:500])
+            if resp.status_code not in (400, 422):
+                break
+    raise RuntimeError(f"ElevenLabs STT {resp.status_code}: {resp.text[:300]}")
 
 
 def _clean_for_speech(text: str) -> str:
@@ -83,7 +93,8 @@ async def _eleven_tts(text: str, dst: Path) -> None:
             headers={"xi-api-key": config.ELEVEN_API_KEY},
             json={"text": text, "model_id": config.ELEVEN_TTS_MODEL, "language_code": "uz"},
         )
-    resp.raise_for_status()
+    if resp.status_code >= 400:
+        raise RuntimeError(f"ElevenLabs TTS {resp.status_code}: {resp.text[:300]}")
     dst.write_bytes(resp.content)
 
 

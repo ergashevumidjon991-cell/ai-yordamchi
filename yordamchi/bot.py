@@ -104,9 +104,9 @@ async def on_voice(message: Message) -> None:
     await message.bot.download(media, destination=path)
     try:
         text = await voice.speech_to_text(path)
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
         log.exception("STT error")
-        await message.answer("Ovozli xabarni tushuna olmadim. Iltimos, yozib yuboring.")
+        await message.answer(f"Ovozli xabarni tushuna olmadim. Iltimos, yozib yuboring.\n\nTexnik sabab: {str(e)[:300]}")
         return
     if not text:
         await message.answer("Ovozli xabarda gap eshitilmadi.")
@@ -161,7 +161,10 @@ async def main() -> None:
     bot = Bot(config.BOT_TOKEN)
     await caller.start()
     asyncio.create_task(reminders.run(bot))
-    await bot.send_message(config.OWNER_ID, "✅ Yordamchi ishga tushdi. /yordam — nimalar qila olishim.")
+    try:
+        await bot.send_message(config.OWNER_ID, "✅ Yordamchi ishga tushdi. /yordam — nimalar qila olishim.")
+    except Exception:  # noqa: BLE001 — egasi hali /start bosmagan bo'lsa ham bot ishlayversin
+        log.warning("Egasiga xabar yuborib bo'lmadi. Botga /start yozing.")
     await dp.start_polling(bot)
 
 
