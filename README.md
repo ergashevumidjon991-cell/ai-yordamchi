@@ -20,7 +20,7 @@ Telegram ichida ishlaydigan shaxsiy yordamchi:
 | Ovozni matnga | ElevenLabs Scribe (zaxira: Whisper, Groq orqali) | bepul tarif: 10 000 kredit/oy |
 | Matnni ovozga | ElevenLabs Eleven v4 (zaxira: Microsoft `uz-UZ-SardorNeural`) | bepul tarif, kerak bo'lsa $6/oy |
 | Qo'ng'iroq | Ikkinchi Telegram akkaunt + py-tgcalls | bepul |
-| Server | Hetzner CX22 yoki shunga o'xshash VPS | ~$5–7/oy |
+| Server | DigitalOcean Droplet (yoki Hetzner) | ~$6/oy |
 | Rejalar bazasi | SQLite (server ichida) | bepul |
 
 ## O'rnatish
@@ -45,15 +45,14 @@ Kredit tugasa, bot o'zi bepul Microsoft ovoziga o'tadi. Zaxira sifatida
 ovozni tanish ham to'xtab qolmaydi.
 
 ### 4. Server
-[Hetzner Cloud](https://www.hetzner.com/cloud) da **CX22** (yoki eng arzon) server oling, tizim: **Ubuntu 24.04**.
+[DigitalOcean](https://www.digitalocean.com) da $6/oy Droplet (yoki Hetzner'da CX server) oling, tizim: **Ubuntu 24.04**.
+Kalitlarni keyin o'zgartirish uchun: `cd /opt/ai-yordamchi && venv/bin/python sozlash.py && systemctl restart ai-yordamchi`.
 Serverga kiring va:
 
 ```bash
-git clone https://github.com/<login>/<repo>.git /opt/ai-yordamchi
+git clone https://github.com/ergashevumidjon991-cell/ai-yordamchi.git /opt/ai-yordamchi
 cd /opt/ai-yordamchi
-bash deploy/install.sh
-nano .env          # 1–3 qadamdagi kalitlarni yozing
-systemctl restart ai-yordamchi
+bash deploy/install.sh   # kalitlarni birma-bir so'raydi
 ```
 
 Botga `/start` yozing. Javob bersa, hammasi ishlayapti.
