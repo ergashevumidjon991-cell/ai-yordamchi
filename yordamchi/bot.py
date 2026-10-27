@@ -31,7 +31,9 @@ HELP = (
     "/hafta — 7 kunlik reja\n"
     "/budilnik — budilniklar ro'yxati\n"
     "/yangi — suhbatni yangidan boshlash\n"
-    "/test_qongiroq — uyg'otish qo'ng'irog'ini sinash"
+    "/test_qongiroq — uyg'otish qo'ng'irog'ini sinash\n"
+    "/bilim — bilim bazasidagi fayllar ro'yxati\n\n"
+    "Bilim bazasiga fayl qo'shish: .md yoki .txt faylni botga yuboring."
 )
 
 
@@ -94,6 +96,31 @@ async def test_call(message: Message) -> None:
     ogg = await voice.text_to_speech(f"Salom {config.OWNER_NAME}, bu sinov qo'ng'irog'i. Hammasi ishlayapti!")
     ok = await caller.ring(await voice.to_call_audio(ogg), seconds=15)
     await message.answer("Qo'ng'iroq ishladi ✅" if ok else "Qo'ng'iroqqa javob berilmadi yoki xato bo'ldi.")
+
+
+@dp.message(Command("bilim"))
+async def knowledge_list(message: Message) -> None:
+    files = sorted(p.name for p in config.KNOWLEDGE_DIR.glob("*") if p.suffix.lower() in {".md", ".txt"}
+                   and p.name.lower() != "readme.md")
+    await message.answer("📚 Bilim bazasi:\n" + "\n".join(f"• {f}" for f in files) if files else "Bilim bazasi bo'sh.")
+
+
+@dp.message(F.document)
+async def on_document(message: Message) -> None:
+    """Egasi yuborgan .md/.txt faylni bilim bazasiga qo'shadi (faqat serverda saqlanadi)."""
+    name = Path(message.document.file_name or "").name
+    if Path(name).suffix.lower() not in {".md", ".txt"}:
+        await message.answer("Bilim bazasiga faqat .md yoki .txt fayl qo'shiladi.")
+        return
+    if message.document.file_size and message.document.file_size > 200_000:
+        await message.answer("Fayl juda katta (200 KB dan ko'p). Uni qisqaroq konspekt qilib yuboring.")
+        return
+    # Shaxsiy fayllar git'ga tushmasligi uchun "shaxsiy-" bilan boshlanadi
+    safe = "".join(c if c.isalnum() or c in "-_." else "-" for c in name)
+    if not safe.startswith("shaxsiy-"):
+        safe = "shaxsiy-" + safe
+    await message.bot.download(message.document, destination=config.KNOWLEDGE_DIR / safe)
+    await message.answer(f"📚 Bilim bazasiga qo'shildi: {safe}\nEndi maslahatlarimda shuni ham hisobga olaman.")
 
 
 @dp.message(F.voice | F.audio)
