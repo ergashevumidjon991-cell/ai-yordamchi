@@ -102,7 +102,9 @@ async def test_call(message: Message) -> None:
 async def knowledge_list(message: Message) -> None:
     files = sorted(p.name for p in config.KNOWLEDGE_DIR.glob("*") if p.suffix.lower() in {".md", ".txt"}
                    and p.name.lower() != "readme.md")
-    await message.answer("📚 Bilim bazasi:\n" + "\n".join(f"• {f}" for f in files) if files else "Bilim bazasi bo'sh.")
+    # Nomlarni <code> ichiga olamiz, aks holda Telegram ".md" ni sayt havolasi deb o'ylaydi
+    text = "📚 Bilim bazasi (serverda saqlanadi):\n" + "\n".join(f"• <code>{f}</code>" for f in files)
+    await message.answer(text if files else "Bilim bazasi bo'sh.", parse_mode="HTML")
 
 
 @dp.message(F.document)
