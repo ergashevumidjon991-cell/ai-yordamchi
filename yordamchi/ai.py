@@ -344,7 +344,11 @@ async def ask(user_text: str, remember: bool = True) -> str:
             return "Claude bilan aloqa uzildi, birozdan keyin qayta urinib ko'ring."
         except anthropic.APIStatusError as e:
             log.error("Claude API error: %s", e)
-            return "Claude xato qaytardi. Loglarni tekshiring."
+            detail = getattr(e, "message", "") or str(e)
+            if "credit balance" in detail.lower():
+                return ("Claude API hisobida pul tugadi. console.anthropic.com → Billing bo'limida "
+                        "hisobni to'ldiring, keyin yana yozing.")
+            return f"Claude xato qaytardi ({e.status_code}): {detail[:300]}"
 
         text = "".join(b.text for b in response.content if b.type == "text").strip()
         if text:
