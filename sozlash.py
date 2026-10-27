@@ -30,6 +30,13 @@ DEFAULTS = {
 }
 
 
+def clean(value: str) -> str:
+    """Brauzer konsoli qo'yilgan matnga qo'shib yuboradigan belgilarni olib tashlaydi."""
+    for junk in ("\x1b[200~", "\x1b[201~", "^[[200~", "^[[201~", "[200~", "[201~"):
+        value = value.replace(junk, "")
+    return value.strip().strip("~").strip().strip("'\"")
+
+
 def read_env() -> dict:
     values = {}
     if ENV.exists():
@@ -48,7 +55,7 @@ def main() -> None:
         old = values.get(key, "")
         hint = f" [{old[:6]}...]" if old else ""
         while True:
-            answer = input(f"{question}{hint}: ").strip().strip("'\"")
+            answer = clean(input(f"{question}{hint}: "))
             if answer:
                 values[key] = answer
             if values.get(key) or not required:
