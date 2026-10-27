@@ -103,14 +103,27 @@ class Caller:
                 log.exception("Userbot handler error")
                 await self.send_text("Kechirasiz, xatolik bo'ldi. Qaytadan yozib ko'ring.")
 
+    def on_other_message(self, handler) -> None:
+        """Egasidan boshqa odamlar (mijozlar) yozgan shaxsiy xabarlarni handler(event) ga uzatadi."""
+        from telethon import events
+
+        @self._client.on(events.NewMessage(incoming=True))
+        async def _wrap(event) -> None:
+            if not event.is_private or event.sender_id == config.OWNER_ID:
+                return
+            try:
+                await handler(event)
+            except Exception:  # noqa: BLE001
+                log.exception("Mijoz xabari handler error")
+
     async def send_text(self, text: str) -> None:
         await self._client.send_message(config.OWNER_ID, text)
 
     async def send_voice(self, ogg: Path, caption: str = "") -> None:
         await self._client.send_file(config.OWNER_ID, str(ogg), voice_note=True, caption=caption[:1000])
 
-    async def send_to(self, contact: str, text: str) -> None:
-        """Istalgan odamga (@username yoki +998... raqam) yozadi."""
+    async def send_to(self, contact: str, text: str) -> int:
+        """Istalgan odamga (@username yoki +998... raqam) yozadi. Uning Telegram id sini qaytaradi."""
         contact = contact.strip()
         digits = contact.lstrip("+").replace(" ", "").replace("-", "")
         if digits.isdigit():
@@ -125,7 +138,11 @@ class Caller:
             entity = result.users[0]
         else:
             entity = contact if contact.startswith("@") else "@" + contact
-        await self._client.send_message(entity, text)
+        message = await self._client.send_message(entity, text)
+        return message.chat_id
+
+    async def send_to_id(self, tg_id: int, text: str) -> None:
+        await self._client.send_message(tg_id, text)
 
     def typing(self, voice: bool = False):
         """async with caller.typing(): ... — "yozmoqda"/"ovoz yozmoqda" holatini ko'rsatadi."""

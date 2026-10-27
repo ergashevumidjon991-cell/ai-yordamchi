@@ -28,6 +28,11 @@ taklif qil. Foydalanuvchi rozi bo'lsa, ularni ham rejaga qo'sh.
 - S'yomka mijoz (buyurtmachi) uchun bo'lsa va {name} mijozning @username yoki telefon raqamini aytsa, \
 uni client_contact ga, ismini client_name ga yoz. Shunda yordamchi akkaunt mijozga s'yomkadan \
 1 kun va 2 soat oldin o'zi eslatma yuboradi. Kontakt aytilmagan bo'lsa, so'rab o'tirma.
+- Budilnik: "ertaga 7:00 da uyg'ot", "soat 6 da uyg'ot" kabi bir martalik so'rovda add_alarm ga \
+faqat date ni ber (days bermaysan). days ni faqat "har kuni", "har dushanba", "ish kunlari" kabi \
+aniq takrorlanadigan so'rovda ber. Javobda budilnik bir martalikmi yoki takrorlanadimi, aytib qo'y.
+- {name} "Aliga yoz: ..." yoki "mijozga ayt: ..." desa, send_message bilan yordamchi akkauntdan yubor. \
+Xabarni {name} nomidan emas, yordamchi sifatida, odobli qilib yoz.
 - Bir kunga juda ko'p ish tushib qolsa yoki rejalar bir-biriga to'g'ri kelsa, ogohlantir.
 - Maslahatchi sifatida: kuchli montajyorlar, marketologlar va biznesmenlar tajribasiga tayan \
 (hook birinchi 1-3 soniyada, saqlash (retention), trendlar, kontent rejasi, auditoriya, sotuv, \
@@ -108,16 +113,32 @@ TOOLS = [
     },
     {
         "name": "add_alarm",
-        "description": "Uyg'otish budilnigi qo'shadi. Belgilangan vaqtda bot Telegram orqali qo'ng'iroq qiladi.",
+        "description": "Uyg'otish budilnigi qo'shadi. Belgilangan vaqtda Telegram orqali qo'ng'iroq qiladi. "
+                       "Bir martalik bo'lsa (masalan 'ertaga 7:00') faqat date ber. days ni faqat "
+                       "'har kuni', 'har dushanba' kabi takrorlanadigan so'rovda ber. "
+                       "Ikkalasi ham berilmasa, eng yaqin shu vaqtga bir martalik qo'yiladi.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "time": {"type": "string", "description": "'HH:MM'"},
-                "days": {"type": "string", "description": "Takrorlanadigan hafta kunlari raqamlari, 0=dushanba ... 6=yakshanba. Masalan har kuni '0123456', ish kunlari '01234'."},
-                "date": {"type": "string", "description": "Faqat bir marta bo'lsa: 'YYYY-MM-DD'"},
+                "days": {"type": "string", "description": "FAQAT takrorlanadigan budilnik uchun: hafta kunlari raqamlari, 0=dushanba ... 6=yakshanba. Har kuni '0123456', ish kunlari '01234'. Bir martalikda bermang."},
+                "date": {"type": "string", "description": "Bir martalik budilnik sanasi: 'YYYY-MM-DD' (masalan ertaga uchun ertangi sana)"},
                 "label": {"type": "string"},
             },
             "required": ["time"],
+        },
+    },
+    {
+        "name": "send_message",
+        "description": "Yordamchi Telegram akkauntidan boshqa odamga (mijozga) xabar yuboradi. "
+                       "Faqat egasi aniq so'raganda ishlat.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "to": {"type": "string", "description": "@username, +998... raqam yoki avval yozishgan odamning ismi"},
+                "text": {"type": "string", "description": "Yuboriladigan xabar matni"},
+            },
+            "required": ["to", "text"],
         },
     },
     {
@@ -137,8 +158,28 @@ TOOLS = [
 ]
 
 
-def _run_tool(name: str, args: dict) -> str:
+async def _send_message(to: str, text: str) -> str:
+    from .caller import caller
+
+    if caller._client is None:
+        return "Yordamchi akkaunt ulanmagan, yubora olmayman"
+    to = to.strip()
+    plain = to.lstrip("+").replace(" ", "").replace("-", "")
+    known = None if (to.startswith("@") or plain.isdigit()) else db.find_contact(to)
+    if known:
+        await caller.send_to_id(known["tg_id"], text)
+        return f"Yuborildi: {known['name'] or known['contact']}"
+    if not (to.startswith("@") or plain.isdigit()):
+        return "Bu odam topilmadi. @username yoki telefon raqamini so'ra"
+    tg_id = await caller.send_to(to, text)
+    db.save_contact(tg_id, contact=to)
+    return f"Yuborildi: {to}"
+
+
+async def _run_tool(name: str, args: dict) -> str:
     try:
+        if name == "send_message":
+            return await _send_message(args["to"], args["text"])
         if name == "add_event":
             result = db.add_event(**args)
         elif name == "list_events":
@@ -168,6 +209,28 @@ WEEKDAYS = ["dushanba", "seshanba", "chorshanba", "payshanba", "juma", "shanba",
 def _now_note() -> str:
     n = db.now()
     return f"[Hozirgi vaqt: {n:%Y-%m-%d %H:%M}, {WEEKDAYS[n.weekday()]}]"
+
+
+async def chat(system: str, messages: list[dict]) -> str:
+    """Vositalarsiz oddiy javob (mijozlar bilan suhbat uchun). Xato bo'lsa bo'sh qator."""
+    extra = {}
+    if config.CLAUDE_MODEL in FALLBACK_MODELS:
+        extra = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
+    try:
+        response = await client.beta.messages.create(
+            model=config.CLAUDE_MODEL,
+            max_tokens=4000,
+            system=system,
+            messages=messages,
+            output_config={"effort": config.CLAUDE_EFFORT},
+            **extra,
+        )
+    except anthropic.APIError:
+        log.exception("Claude API error (mijoz suhbati)")
+        return ""
+    if response.stop_reason == "refusal":
+        return ""
+    return "".join(b.text for b in response.content if b.type == "text").strip()
 
 
 async def ask(user_text: str, remember: bool = True) -> str:
@@ -215,7 +278,7 @@ async def ask(user_text: str, remember: bool = True) -> str:
 
         messages.append({"role": "assistant", "content": response.content})
         results = [
-            {"type": "tool_result", "tool_use_id": b.id, "content": _run_tool(b.name, dict(b.input))}
+            {"type": "tool_result", "tool_use_id": b.id, "content": await _run_tool(b.name, dict(b.input))}
             for b in response.content
             if b.type == "tool_use"
         ]

@@ -47,7 +47,7 @@ def alarms_text() -> str:
     days = ["Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"]
     lines = []
     for a in items:
-        when = a["date"] or ", ".join(days[int(d)] for d in a["days"])
+        when = f"bir marta, {a['date']}" if a["date"] else ", ".join(days[int(d)] for d in a["days"])
         lines.append(f"#{a['id']}  {a['time']}  ({when}) {a['label']}")
     return "⏰ Budilniklar:\n" + "\n".join(lines)
 

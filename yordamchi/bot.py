@@ -8,7 +8,7 @@ from aiogram.enums import ChatAction
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, FSInputFile, Message
 
-from . import actions, ai, config, db, notify, reminders, userchat, voice
+from . import actions, ai, config, db, guests, notify, reminders, userchat, voice
 from .caller import caller
 from .userchat import TEST_CALL_GREETING, TEST_CALL_TEXT
 
@@ -181,6 +181,8 @@ async def main() -> None:
     if caller.chat_enabled:
         userchat.setup()
         log.info("Suhbat va eslatmalar ikkinchi akkaunt orqali")
+    if caller._client is not None:
+        guests.setup()   # mijozlar yozsa o'qiydi va javob beradi
     asyncio.create_task(reminders.run())
     try:
         await notify.text("✅ Yordamchi ishga tushdi. /yordam — nimalar qila olishim.")

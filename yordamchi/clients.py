@@ -33,7 +33,9 @@ async def _send(event: dict) -> str | None:
     if caller._client is None:
         return "yordamchi akkaunt ulanmagan"
     try:
-        await caller.send_to(event["client_contact"], client_text(event))
+        tg_id = await caller.send_to(event["client_contact"], client_text(event))
+        # Mijoz javob yozsa, yordamchi uni taniydi va s'yomka haqida javob beradi (guests.py)
+        db.save_contact(tg_id, event["client_name"], event["client_contact"], event["id"])
     except Exception as e:  # noqa: BLE001
         log.exception("Mijozga yuborib bo'lmadi")
         return str(e)[:200]

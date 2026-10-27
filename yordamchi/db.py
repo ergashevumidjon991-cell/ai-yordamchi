@@ -1,6 +1,6 @@
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from . import config
 
@@ -29,6 +29,12 @@ _conn.executescript(
         label TEXT DEFAULT '',
         enabled INTEGER DEFAULT 1,
         last_fired TEXT DEFAULT ''
+    );
+    CREATE TABLE IF NOT EXISTS contacts (
+        tg_id INTEGER PRIMARY KEY,       -- yordamchi akkaunt yozishgan odamning Telegram id si
+        name TEXT DEFAULT '',
+        contact TEXT DEFAULT '',         -- @username yoki +998... raqam
+        event_id INTEGER                 -- mijoz bo'lsa, qaysi s'yomka uchun eslatma olgan
     );
     CREATE TABLE IF NOT EXISTS history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -131,12 +137,19 @@ def set_last_nag(event_id: int, when: datetime) -> None:
 
 # --- Budilniklar ---
 
-def add_alarm(time: str, days: str = "0123456", date: str = "", label: str = "") -> dict:
+def add_alarm(time: str, days: str = "", date: str = "", label: str = "") -> dict:
+    """days berilsa — takrorlanadi, aks holda bir martalik (date yoki eng yaqin shu vaqt)."""
     hh, mm = time.strip().split(":")[:2]
     time = f"{int(hh):02d}:{int(mm):02d}"
+    days = "".join(d for d in (days or "") if d in "0123456")
+    date = (date or "")[:10]
+    if not days and not date:
+        n = now()
+        day = n.date() if time > n.strftime("%H:%M") else n.date() + timedelta(days=1)
+        date = day.isoformat()
     cur = _conn.execute(
         "INSERT INTO alarms (time, days, date, label) VALUES (?, ?, ?, ?)",
-        (time, days or "0123456", date[:10] if date else "", label),
+        (time, days if not date else "", date, label),
     )
     _conn.commit()
     return _row(_conn.execute("SELECT * FROM alarms WHERE id = ?", (cur.lastrowid,)).fetchone())
@@ -183,3 +196,36 @@ def get_history() -> list[dict]:
 def clear_history() -> None:
     _conn.execute("DELETE FROM history")
     _conn.commit()
+
+
+def save_contact(tg_id: int, name: str = "", contact: str = "", event_id: int | None = None) -> None:
+    """Yordamchi yozishgan odamni eslab qoladi; event_id faqat yangi qiymat bo'lsa almashtiriladi."""
+    _conn.execute(
+        "INSERT INTO contacts (tg_id, name, contact, event_id) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(tg_id) DO UPDATE SET name = COALESCE(NULLIF(excluded.name, ''), name), "
+        "contact = COALESCE(NULLIF(excluded.contact, ''), contact), "
+        "event_id = COALESCE(excluded.event_id, event_id)",
+        (tg_id, name, contact, event_id),
+    )
+    _conn.commit()
+
+
+def get_contact(tg_id: int) -> dict | None:
+    return _row(_conn.execute("SELECT * FROM contacts WHERE tg_id = ?", (tg_id,)).fetchone())
+
+
+def find_contact(name: str) -> dict | None:
+    """Ism yoki @username bo'yicha (egasi «Aliga yoz» desa)."""
+    q = f"%{name.strip().lstrip('@')}%"
+    return _row(_conn.execute(
+        "SELECT * FROM contacts WHERE name LIKE ? OR contact LIKE ? ORDER BY event_id IS NULL, rowid DESC LIMIT 1",
+        (q, q)).fetchone())
+
+
+def client_events(contact: dict) -> list[dict]:
+    """Shu mijozning hali o'tmagan s'yomkalari."""
+    rows = _conn.execute(
+        "SELECT * FROM events WHERE status = 'active' AND kind = 'syomka' AND (id = ? OR "
+        "(client_contact != '' AND client_contact = ?)) ORDER BY start_at",
+        (contact.get("event_id") or -1, contact.get("contact") or "\0"))
+    return [dict(r) for r in rows]
