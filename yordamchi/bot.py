@@ -173,7 +173,11 @@ async def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     bot = Bot(config.BOT_TOKEN)
     notify.bot = bot
-    await caller.start()
+    try:
+        await caller.start()
+    except Exception:  # noqa: BLE001 — ikkinchi akkaunt ishlamasa ham bot ishlayversin
+        log.exception("Ikkinchi akkauntni ishga tushirib bo'lmadi")
+        caller.enabled = False
     if caller.chat_enabled:
         userchat.setup()
         log.info("Suhbat va eslatmalar ikkinchi akkaunt orqali")

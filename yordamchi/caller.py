@@ -31,8 +31,17 @@ class Caller:
 
         self._client = TelegramClient(config.USERBOT_SESSION, int(config.USERBOT_API_ID), config.USERBOT_API_HASH)
         await self._client.start()
+        if (await self._client.get_me()).bot:
+            log.error("Ikkinchi akkaunt o'rniga bot ulangan. Qayta ulang: python login_userbot.py")
+            await self._client.disconnect()
+            self._client = None
+            self.enabled = False
+            return
         # Egasini topa olishimiz uchun suhbatlar ro'yxatini yuklaymiz (avval egasi bir marta yozgan bo'lishi kerak)
-        await self._client.get_dialogs()
+        try:
+            await self._client.get_dialogs()
+        except Exception:  # noqa: BLE001
+            log.exception("Suhbatlar ro'yxatini yuklab bo'lmadi")
         try:
             from pytgcalls import PyTgCalls
 
