@@ -1,5 +1,7 @@
 import json
 import logging
+import tempfile
+from pathlib import Path
 
 import anthropic
 
@@ -31,6 +33,9 @@ uni client_contact ga, ismini client_name ga yoz. Shunda yordamchi akkaunt mijoz
 - Budilnik: "ertaga 7:00 da uyg'ot", "soat 6 da uyg'ot" kabi bir martalik so'rovda add_alarm ga \
 faqat date ni ber (days bermaysan). days ni faqat "har kuni", "har dushanba", "ish kunlari" kabi \
 aniq takrorlanadigan so'rovda ber. Javobda budilnik bir martalikmi yoki takrorlanadimi, aytib qo'y.
+- Yordamchi akkauntga boshqa odamlar (mijozlar) yozgan xabarlarni read_messages bilan o'qiy olasan. \
+"Nosir aka nima yozdi?", "kim yozdi?", "yangi xabarlar bormi?" desa, shu vositani ishlat va \
+qisqa aytib ber. "O'qiy olmayman" dema.
 - {name} "Aliga yoz: ..." yoki "mijozga ayt: ..." desa, send_message bilan yordamchi akkauntdan yubor. \
 Xabarni {name} nomidan emas, yordamchi sifatida, odobli qilib yoz.
 - Bir kunga juda ko'p ish tushib qolsa yoki rejalar bir-biriga to'g'ri kelsa, ogohlantir.
@@ -142,6 +147,18 @@ TOOLS = [
         },
     },
     {
+        "name": "read_messages",
+        "description": "Yordamchi Telegram akkauntiga boshqa odamlar yozgan xabarlarni o'qiydi. "
+                       "who bo'sh bo'lsa, oxirgi yozishgan odamlar ro'yxati va o'qilmagan xabarlar soni. "
+                       "who berilsa, o'sha odam bilan oxirgi xabarlar.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "who": {"type": "string", "description": "Ism, @username yoki telefon raqami (masalan 'Nosir')"},
+            },
+        },
+    },
+    {
         "name": "list_alarms",
         "description": "Barcha faol budilniklarni ko'rsatadi.",
         "input_schema": {"type": "object", "properties": {}},
@@ -170,14 +187,76 @@ async def _send_message(to: str, text: str) -> str:
         await caller.send_to_id(known["tg_id"], text)
         return f"Yuborildi: {known['name'] or known['contact']}"
     if not (to.startswith("@") or plain.isdigit()):
-        return "Bu odam topilmadi. @username yoki telefon raqamini so'ra"
+        match = _find_dialog(await _dialogs(), to)
+        if match is None:
+            return "Bu odam topilmadi. @username yoki telefon raqamini so'ra"
+        await caller._client.send_message(match.entity, text)
+        db.save_contact(match.id, match.name)
+        return f"Yuborildi: {match.name}"
     tg_id = await caller.send_to(to, text)
     db.save_contact(tg_id, contact=to)
     return f"Yuborildi: {to}"
 
 
+async def _dialogs() -> list:
+    """Yordamchi akkauntning shaxsiy suhbatlari (egasi, botlar va Telegram xizmatisiz)."""
+    from .caller import caller
+
+    return [d for d in await caller._client.get_dialogs(limit=40)
+            if d.is_user and d.id != config.OWNER_ID and not getattr(d.entity, "bot", False)
+            and d.id != 777000]
+
+
+def _find_dialog(dialogs: list, who: str):
+    q = who.strip().lstrip("@+").lower()
+    words = [w for w in q.replace("aka", "").replace("opa", "").split() if w]
+    for d in dialogs:
+        hay = " ".join(str(x or "") for x in (d.name, getattr(d.entity, "username", ""),
+                                              getattr(d.entity, "phone", ""))).lower()
+        if q in hay or (words and all(w in hay for w in words)):
+            return d
+    return None
+
+
+async def _read_messages(who: str = "") -> str:
+    from . import voice
+    from .caller import caller
+
+    if caller._client is None:
+        return "Yordamchi akkaunt ulanmagan"
+    dialogs = await _dialogs()
+    if not who.strip():
+        return json.dumps([{"ism": d.name, "username": getattr(d.entity, "username", None),
+                            "o'qilmagan": d.unread_count,
+                            "oxirgi": (d.message.message or "[ovoz/fayl]")[:100] if d.message else ""}
+                           for d in dialogs[:15]], ensure_ascii=False)
+    match = _find_dialog(dialogs, who)
+    if match is None:
+        return f"'{who}' bilan yozishma topilmadi. Bor suhbatlar: " + ", ".join(d.name for d in dialogs[:15])
+    lines, voices = [], 0
+    async for m in caller._client.iter_messages(match.entity, limit=15):
+        text = m.message or ""
+        if m.voice and voices < 3 and not m.out:
+            voices += 1
+            try:
+                path = Path(tempfile.mkdtemp()) / "x.ogg"
+                await m.download_media(file=str(path))
+                text = "[ovozli] " + (await voice.speech_to_text(path) or "")
+            except Exception:  # noqa: BLE001
+                text = "[ovozli xabar, tushunib bo'lmadi]"
+        lines.append(f"{m.date.astimezone(config.TZ):%d.%m %H:%M} "
+                     f"{'Yordamchi' if m.out else match.name}: {text or '[rasm/fayl]'}")
+    try:
+        await caller._client.send_read_acknowledge(match.entity)
+    except Exception:  # noqa: BLE001
+        pass
+    return "\n".join(reversed(lines))
+
+
 async def _run_tool(name: str, args: dict) -> str:
     try:
+        if name == "read_messages":
+            return await _read_messages(args.get("who", ""))
         if name == "send_message":
             return await _send_message(args["to"], args["text"])
         if name == "add_event":
