@@ -34,6 +34,8 @@ TTS_VOICE = _get("TTS_VOICE", "uz-UZ-SardorNeural")
 
 USERBOT_API_ID = _get("USERBOT_API_ID")
 USERBOT_API_HASH = _get("USERBOT_API_HASH")
+# "userbot" — suhbat, eslatma va budilniklar ikkinchi akkaunt orqali; "bot" — oddiy bot orqali
+CHAT_VIA = _get("CHAT_VIA", "userbot").lower()
 
 TZ = ZoneInfo(_get("TIMEZONE", "Asia/Tashkent"))
 

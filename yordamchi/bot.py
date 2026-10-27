@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import tempfile
-from datetime import timedelta
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher, F
@@ -9,7 +8,7 @@ from aiogram.enums import ChatAction
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, FSInputFile, Message
 
-from . import ai, config, db, reminders, voice
+from . import actions, ai, config, db, notify, reminders, userchat, voice
 from .caller import caller
 
 log = logging.getLogger(__name__)
@@ -69,16 +68,7 @@ async def plan(message: Message) -> None:
 
 @dp.message(Command("budilnik"))
 async def alarms(message: Message) -> None:
-    items = db.list_alarms()
-    if not items:
-        await message.answer("Budilnik yo'q. Masalan, «Har kuni 6:30 da uyg'ot» deb yozing.")
-        return
-    days = ["Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"]
-    lines = []
-    for a in items:
-        when = a["date"] or ", ".join(days[int(d)] for d in a["days"])
-        lines.append(f"#{a['id']}  {a['time']}  ({when}) {a['label']}")
-    await message.answer("⏰ Budilniklar:\n" + "\n".join(lines))
+    await message.answer(userchat.alarms_text())
 
 
 @dp.message(Command("yangi"))
@@ -100,8 +90,7 @@ async def test_call(message: Message) -> None:
 
 @dp.message(Command("bilim"))
 async def knowledge_list(message: Message) -> None:
-    files = sorted(p.name for p in config.KNOWLEDGE_DIR.glob("*") if p.suffix.lower() in {".md", ".txt"}
-                   and p.name.lower() != "readme.md")
+    files = actions.knowledge_files()
     # Nomlarni <code> ichiga olamiz, aks holda Telegram ".md" ni sayt havolasi deb o'ylaydi
     text = "📚 Bilim bazasi (serverda saqlanadi):\n" + "\n".join(f"• <code>{f}</code>" for f in files)
     await message.answer(text if files else "Bilim bazasi bo'sh.", parse_mode="HTML")
@@ -110,19 +99,15 @@ async def knowledge_list(message: Message) -> None:
 @dp.message(F.document)
 async def on_document(message: Message) -> None:
     """Egasi yuborgan .md/.txt faylni bilim bazasiga qo'shadi (faqat serverda saqlanadi)."""
-    name = Path(message.document.file_name or "").name
-    if Path(name).suffix.lower() not in {".md", ".txt"}:
+    target = actions.knowledge_target(message.document.file_name or "")
+    if target is None:
         await message.answer("Bilim bazasiga faqat .md yoki .txt fayl qo'shiladi.")
         return
     if message.document.file_size and message.document.file_size > 200_000:
         await message.answer("Fayl juda katta (200 KB dan ko'p). Uni qisqaroq konspekt qilib yuboring.")
         return
-    # Shaxsiy fayllar git'ga tushmasligi uchun "shaxsiy-" bilan boshlanadi
-    safe = "".join(c if c.isalnum() or c in "-_." else "-" for c in name)
-    if not safe.startswith("shaxsiy-"):
-        safe = "shaxsiy-" + safe
-    await message.bot.download(message.document, destination=config.KNOWLEDGE_DIR / safe)
-    await message.answer(f"📚 Bilim bazasiga qo'shildi: {safe}\nEndi maslahatlarimda shuni ham hisobga olaman.")
+    await message.bot.download(message.document, destination=target)
+    await message.answer(f"📚 Bilim bazasiga qo'shildi: {target.name}\nEndi maslahatlarimda shuni ham hisobga olaman.")
 
 
 @dp.message(F.voice | F.audio)
@@ -155,7 +140,7 @@ async def on_text(message: Message) -> None:
 @dp.callback_query(F.data.startswith("depart:"))
 async def on_depart(call: CallbackQuery) -> None:
     event_id = int(call.data.split(":")[1])
-    db.update_event(event_id, status="departed")
+    actions.depart(event_id)
     await call.answer("Omad! 🎬")
     await call.message.edit_reply_markup(reply_markup=None)
     await call.message.answer("Zo'r, yo'lingiz bexatar bo'lsin! S'yomkadan keyin montaj vaqtini rejalashtirishni unutmang.")
@@ -163,7 +148,7 @@ async def on_depart(call: CallbackQuery) -> None:
 
 @dp.callback_query(F.data.startswith("done:"))
 async def on_done(call: CallbackQuery) -> None:
-    db.update_event(int(call.data.split(":")[1]), status="done")
+    actions.done(int(call.data.split(":")[1]))
     await call.answer("Bajarildi ✅")
     await call.message.edit_reply_markup(reply_markup=None)
 
@@ -171,27 +156,30 @@ async def on_done(call: CallbackQuery) -> None:
 @dp.callback_query(F.data.startswith("snooze:"))
 async def on_snooze(call: CallbackQuery) -> None:
     event_id = int(call.data.split(":")[1])
-    # Keyingi eslatma 15 daqiqadan keyin keladi
-    db.set_last_nag(event_id, db.now() + timedelta(minutes=15 - config.SHOOT_NAG_EVERY))
+    actions.snooze(event_id)
     await call.answer("15 daqiqadan keyin yana eslataman")
     await call.message.edit_reply_markup(reply_markup=None)
 
 
 @dp.callback_query(F.data.startswith("awake:"))
 async def on_awake(call: CallbackQuery) -> None:
-    reminders.ringing.pop(int(call.data.split(":")[1]), None)
+    actions.awake(int(call.data.split(":")[1]))
     await call.answer("Xayrli tong! ☀️")
     await call.message.edit_reply_markup(reply_markup=None)
-    await reminders.morning_briefing(call.bot)
+    await reminders.morning_briefing()
 
 
 async def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     bot = Bot(config.BOT_TOKEN)
+    notify.bot = bot
     await caller.start()
-    asyncio.create_task(reminders.run(bot))
+    if caller.chat_enabled:
+        userchat.setup()
+        log.info("Suhbat va eslatmalar ikkinchi akkaunt orqali")
+    asyncio.create_task(reminders.run())
     try:
-        await bot.send_message(config.OWNER_ID, "✅ Yordamchi ishga tushdi. /yordam — nimalar qila olishim.")
+        await notify.text("✅ Yordamchi ishga tushdi. /yordam — nimalar qila olishim.")
     except Exception:  # noqa: BLE001 — egasi hali /start bosmagan bo'lsa ham bot ishlayversin
         log.warning("Egasiga xabar yuborib bo'lmadi. Botga /start yozing.")
     await dp.start_polling(bot)
