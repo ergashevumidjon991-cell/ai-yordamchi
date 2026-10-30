@@ -20,7 +20,12 @@ OWNER_NAME = _get("OWNER_NAME", "Xo'jayin")
 
 AI_PROVIDER = _get("AI_PROVIDER", "claude")          # claude | gemini
 GEMINI_API_KEY = _get("GEMINI_API_KEY", "")
-GEMINI_MODEL = _get("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = _get("GEMINI_MODEL", "gemini-3.8-flash")
+CALL_AI_PROVIDER = _get("CALL_AI_PROVIDER", "")     # qo'ng'iroqdagi javoblar: bo'sh = AI_PROVIDER bilan bir xil
+VOICE_PROVIDER = _get("VOICE_PROVIDER", "eleven")   # eleven | gemini (ovozni matnga va matnni ovozga)
+GEMINI_STT_MODEL = _get("GEMINI_STT_MODEL", "")     # bo'sh = GEMINI_MODEL
+GEMINI_TTS_MODEL = _get("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
+GEMINI_TTS_VOICE = _get("GEMINI_TTS_VOICE", "Charon")  # erkak ovozi
 CLAUDE_MODEL = _get("CLAUDE_MODEL", "claude-opus-5-5")
 CLAUDE_EFFORT = _get("CLAUDE_EFFORT", "low")
 

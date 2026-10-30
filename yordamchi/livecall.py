@@ -122,10 +122,10 @@ class Conversation:
                 await self.say(_plain(reply))
                 if result == "awake":
                     briefing = await ai.ask(CALL_NOTE + "Men hozir uyg'ondim. Bugungi rejalarimni qisqa aytib ber.",
-                                            remember=False)
+                                            remember=False, provider=config.CALL_AI_PROVIDER)
                     await self.say(briefing)
                 return
-            reply = await ai.ask(CALL_NOTE + text)
+            reply = await ai.ask(CALL_NOTE + text, provider=config.CALL_AI_PROVIDER)
             await self.say(reply)
         except Exception:  # noqa: BLE001
             log.exception("Qo'ng'iroqdagi gapni qayta ishlab bo'lmadi")

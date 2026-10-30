@@ -316,9 +316,12 @@ async def chat(system: str, messages: list[dict]) -> str:
     return "".join(b.text for b in response.content if b.type == "text").strip()
 
 
-async def ask(user_text: str, remember: bool = True) -> str:
-    """Foydalanuvchi xabariga javob beradi, kerak bo'lsa rejalarni o'zgartiradi."""
-    if config.AI_PROVIDER == "gemini":
+async def ask(user_text: str, remember: bool = True, provider: str = "") -> str:
+    """Foydalanuvchi xabariga javob beradi, kerak bo'lsa rejalarni o'zgartiradi.
+
+    provider bo'sh bo'lsa AI_PROVIDER ishlatiladi (qo'ng'iroqda CALL_AI_PROVIDER beriladi).
+    """
+    if (provider or config.AI_PROVIDER) == "gemini":
         from . import gemini_ai
 
         return await gemini_ai.ask(user_text, remember)

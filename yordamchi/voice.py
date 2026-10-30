@@ -16,7 +16,17 @@ ELEVEN_URL = "https://api.elevenlabs.io/v1"
 
 
 async def speech_to_text(audio_path: Path) -> str:
-    """Ovozli xabarni matnga aylantiradi: ElevenLabs Scribe, bo'lmasa Whisper."""
+    """Ovozli xabarni matnga aylantiradi: Gemini yoki ElevenLabs Scribe, bo'lmasa Whisper."""
+    if config.VOICE_PROVIDER == "gemini":
+        from . import gemini_ai
+
+        try:
+            return await gemini_ai.speech_to_text(audio_path)
+        except Exception as e:  # noqa: BLE001 — Gemini ishlamasa bepul Whisper'ga o'tamiz
+            if not config.STT_API_KEY:
+                raise
+            log.warning("Gemini STT ishlamadi (%s), Whisper ishlatiladi", e)
+        return await _whisper(audio_path)
     if config.ELEVEN_API_KEY:
         try:
             return await _eleven_stt(audio_path)
@@ -26,6 +36,10 @@ async def speech_to_text(audio_path: Path) -> str:
             log.warning("ElevenLabs STT ishlamadi (%s), Whisper ishlatiladi", e)
     if not config.STT_API_KEY:
         raise RuntimeError("ELEVEN_API_KEY ham, STT_API_KEY ham ko'rsatilmagan")
+    return await _whisper(audio_path)
+
+
+async def _whisper(audio_path: Path) -> str:
     async with httpx.AsyncClient(timeout=120) as http:
         with audio_path.open("rb") as f:
             resp = await http.post(
@@ -74,12 +88,18 @@ async def text_to_speech(text: str) -> Path:
     ogg = tmp / "javob.ogg"
     text = _clean_for_speech(text)
     try:
-        if not config.ELEVEN_API_KEY:
+        if config.VOICE_PROVIDER == "gemini":
+            from . import gemini_ai
+
+            pcm = tmp / "javob.pcm"
+            pcm.write_bytes(await gemini_ai.text_to_speech_pcm(text))
+            await _ffmpeg("-f", "s16le", "-ar", "24000", "-ac", "1", "-i", str(pcm), str(mp3))
+        elif config.ELEVEN_API_KEY:
+            await _eleven_tts(text, mp3)
+        else:
             raise RuntimeError("ElevenLabs sozlanmagan")
-        await _eleven_tts(text, mp3)
     except Exception as e:  # noqa: BLE001 — kredit tugasa yoki xato bo'lsa bepul ovozga o'tamiz
-        if config.ELEVEN_API_KEY:
-            log.warning("ElevenLabs TTS ishlamadi (%s), bepul ovoz ishlatiladi", e)
+        log.warning("Asosiy ovoz ishlamadi (%s), bepul ovoz ishlatiladi", e)
         await edge_tts.Communicate(text, config.TTS_VOICE).save(str(mp3))
     await _ffmpeg("-i", str(mp3), "-c:a", "libopus", "-b:a", "48k", str(ogg))
     return ogg

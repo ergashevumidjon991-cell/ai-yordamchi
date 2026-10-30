@@ -13,13 +13,13 @@ log = logging.getLogger(__name__)
 _client: genai.Client | None = None
 
 
-async def _generate(contents, cfg):
+async def _generate(contents, cfg, model: str = ""):
     """Gemini band bo'lsa (503/429) bir necha marta qayta urinadi."""
     delay = 2
     for attempt in range(4):
         try:
             return await _gemini().aio.models.generate_content(
-                model=config.GEMINI_MODEL, contents=contents, config=cfg)
+                model=model or config.GEMINI_MODEL, contents=contents, config=cfg)
         except genai_errors.APIError as e:
             if e.code not in (429, 503) or attempt == 3:
                 raise
@@ -105,3 +105,33 @@ async def ask(user_text: str, remember: bool = True) -> str:
         db.add_history("user", user_text)
         db.add_history("assistant", reply)
     return reply
+
+
+# --- Ovoz: VOICE_PROVIDER=gemini bo'lsa ---
+
+STT_PROMPT = ("Bu audioda o'zbekcha gap bor. Aytilgan so'zlarni o'zbek lotin yozuvida aynan yozib ber. "
+              "Hech narsa qo'shma, izoh berma. Gap eshitilmasa, bo'sh javob qaytar.")
+AUDIO_TYPES = {".ogg": "audio/ogg", ".oga": "audio/ogg", ".wav": "audio/wav", ".mp3": "audio/mp3"}
+
+
+async def speech_to_text(audio_path) -> str:
+    mime = AUDIO_TYPES.get(audio_path.suffix.lower(), "audio/ogg")
+    contents = [types.Part.from_bytes(data=audio_path.read_bytes(), mime_type=mime), STT_PROMPT]
+    cfg = types.GenerateContentConfig(temperature=0, thinking_config=types.ThinkingConfig(thinking_budget=0))
+    response = await _generate(contents, cfg, config.GEMINI_STT_MODEL or config.GEMINI_MODEL)
+    return _text(response)
+
+
+async def text_to_speech_pcm(text: str) -> bytes:
+    """Matnni ovozga aylantiradi: 24 kHz, 16-bit, mono PCM qaytaradi."""
+    cfg = types.GenerateContentConfig(
+        response_modalities=["AUDIO"],
+        speech_config=types.SpeechConfig(voice_config=types.VoiceConfig(
+            prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=config.GEMINI_TTS_VOICE))),
+    )
+    prompt = f"O'zbek tilida, samimiy va xotirjam ohangda o'qi: {text}"
+    response = await _generate(prompt, cfg, config.GEMINI_TTS_MODEL)
+    for part in response.candidates[0].content.parts:
+        if part.inline_data and part.inline_data.data:
+            return part.inline_data.data
+    raise RuntimeError("Gemini ovoz qaytarmadi")
