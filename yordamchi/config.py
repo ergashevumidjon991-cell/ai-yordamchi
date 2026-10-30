@@ -18,6 +18,9 @@ BOT_TOKEN = _get("BOT_TOKEN", required=True)
 OWNER_ID = int(_get("OWNER_ID", required=True))
 OWNER_NAME = _get("OWNER_NAME", "Xo'jayin")
 
+AI_PROVIDER = _get("AI_PROVIDER", "claude")          # claude | gemini
+GEMINI_API_KEY = _get("GEMINI_API_KEY", "")
+GEMINI_MODEL = _get("GEMINI_MODEL", "gemini-2.5-flash")
 CLAUDE_MODEL = _get("CLAUDE_MODEL", "claude-opus-5-5")
 CLAUDE_EFFORT = _get("CLAUDE_EFFORT", "low")
 

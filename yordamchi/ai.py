@@ -292,6 +292,10 @@ def _now_note() -> str:
 
 async def chat(system: str, messages: list[dict]) -> str:
     """Vositalarsiz oddiy javob (mijozlar bilan suhbat uchun). Xato bo'lsa bo'sh qator."""
+    if config.AI_PROVIDER == "gemini":
+        from . import gemini_ai
+
+        return await gemini_ai.chat(system, messages)
     extra = {}
     if config.CLAUDE_MODEL in FALLBACK_MODELS:
         extra = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
@@ -314,6 +318,10 @@ async def chat(system: str, messages: list[dict]) -> str:
 
 async def ask(user_text: str, remember: bool = True) -> str:
     """Foydalanuvchi xabariga javob beradi, kerak bo'lsa rejalarni o'zgartiradi."""
+    if config.AI_PROVIDER == "gemini":
+        from . import gemini_ai
+
+        return await gemini_ai.ask(user_text, remember)
     history = db.get_history() if remember else []
     # Vaqt eslatmasi xabar ichiga qo'yiladi, system prompt o'zgarmay keshda qoladi
     messages = history + [{"role": "user", "content": f"{_now_note()}\n{user_text}"}]
