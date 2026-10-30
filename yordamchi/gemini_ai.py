@@ -28,6 +28,8 @@ def _config(system: str, with_tools: bool) -> types.GenerateContentConfig:
         system_instruction=system,
         max_output_tokens=4000,
         temperature=0.7,
+        # Ichki o'ylash o'chirilgan: javob tezroq keladi (ovozli xabarga o'xshash qisqa javoblar uchun)
+        thinking_config=types.ThinkingConfig(thinking_budget=0),
         tools=[types.Tool(function_declarations=_declarations())] if with_tools else None,
     )
 
