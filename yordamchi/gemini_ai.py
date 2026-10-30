@@ -1,7 +1,9 @@
 """Gemini orqali javob berish (AI_PROVIDER=gemini bo'lsa). Vositalar (tools) ai.py dagi bilan bir xil."""
+import asyncio
 import logging
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 
 from . import ai, config, db
@@ -9,6 +11,21 @@ from . import ai, config, db
 log = logging.getLogger(__name__)
 
 _client: genai.Client | None = None
+
+
+async def _generate(contents, cfg):
+    """Gemini band bo'lsa (503/429) bir necha marta qayta urinadi."""
+    delay = 2
+    for attempt in range(4):
+        try:
+            return await _gemini().aio.models.generate_content(
+                model=config.GEMINI_MODEL, contents=contents, config=cfg)
+        except genai_errors.APIError as e:
+            if e.code not in (429, 503) or attempt == 3:
+                raise
+            log.warning("Gemini band (%s), %s soniyadan keyin qayta urinaman", e.code, delay)
+            await asyncio.sleep(delay)
+            delay *= 2
 
 
 def _gemini() -> genai.Client:
@@ -43,8 +60,7 @@ async def chat(system: str, messages: list[dict]) -> str:
     contents = [types.Content(role="model" if m["role"] == "assistant" else "user",
                               parts=[types.Part(text=m["content"])]) for m in messages]
     try:
-        response = await _gemini().aio.models.generate_content(
-            model=config.GEMINI_MODEL, contents=contents, config=_config(system, with_tools=False))
+        response = await _generate(contents, _config(system, with_tools=False))
     except Exception:  # noqa: BLE001
         log.exception("Gemini error (mijoz suhbati)")
         return ""
@@ -63,8 +79,7 @@ async def ask(user_text: str, remember: bool = True) -> str:
     reply = ""
     for _ in range(8):
         try:
-            response = await _gemini().aio.models.generate_content(
-                model=config.GEMINI_MODEL, contents=contents, config=cfg)
+            response = await _generate(contents, cfg)
         except Exception as e:  # noqa: BLE001
             log.exception("Gemini error")
             return f"Gemini xato qaytardi: {str(e)[:200]}"
