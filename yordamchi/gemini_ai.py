@@ -31,7 +31,9 @@ async def _generate(contents, cfg):
 def _gemini() -> genai.Client:
     global _client
     if _client is None:
-        _client = genai.Client(api_key=config.GEMINI_API_KEY)
+        # Har bir so'rov 30 soniyadan oshmasin, aks holda javob daqiqalab kutiladi
+        _client = genai.Client(api_key=config.GEMINI_API_KEY,
+                               http_options=types.HttpOptions(timeout=30_000))
     return _client
 
 
